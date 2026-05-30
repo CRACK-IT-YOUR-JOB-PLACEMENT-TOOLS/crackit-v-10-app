@@ -3,6 +3,10 @@ from tkinter import messagebox
 import pyperclip
 import threading
 import os
+import time
+import keyboard
+import sys
+import shutil
 from dotenv import load_dotenv, set_key
 
 from cache_manager import CacheManager
@@ -59,21 +63,52 @@ class SetupDialog:
         inst_frame = tk.Frame(self.root, bg="#2d2d2d", padx=20, pady=15)
         inst_frame.pack(fill="x", padx=30, pady=5)
         
-        instructions = (
-            "How this tool helps you crack your first round:\n\n"
-            "1. Run this app in the background during your online assessment.\n"
-            "2. A draggable traffic light indicator will appear on your screen.\n"
-            "3. Copy any interview question (Ctrl+C).\n"
-            "4. The indicator turns Yellow (Processing) and then Green (Ready).\n"
-            "5. The best answer is automatically copied to your clipboard.\n\n"
-            "Gestures:\n"
-            "• Long Press on Red: Displays this setup dialog to re-configure.\n"
-            "• Double Tap on Green: Resets app back to Red (waiting state).\n"
-            "• Long Press on Green: Immediately stops and closes the app completely."
-        )
+        text_widget = tk.Text(inst_frame, font=text_font, bg="#2d2d2d", fg="#cccccc", 
+                              wrap="word", height=14, width=48, bd=0, highlightthickness=0)
+        text_widget.pack(fill="both", expand=True)
         
-        tk.Label(inst_frame, text=instructions, font=text_font, justify="left", 
-                 bg="#2d2d2d", fg="#cccccc", wraplength=420).pack()
+        text_widget.tag_configure("bold", font=("Segoe UI", 10, "bold"), foreground="#ffffff")
+        text_widget.tag_configure("accent", font=("Segoe UI", 10, "bold"), foreground="#00e676")
+        
+        text_widget.insert("end", "How this tool helps you ")
+        text_widget.insert("end", "crack your first round", "bold")
+        text_widget.insert("end", ":\n\n1. Run this app in the ")
+        text_widget.insert("end", "background", "bold")
+        text_widget.insert("end", " during your online assessment.\n2. A draggable ")
+        text_widget.insert("end", "traffic light indicator", "bold")
+        text_widget.insert("end", " will appear on your screen.\n3. ")
+        text_widget.insert("end", "Highlight", "bold")
+        text_widget.insert("end", " any interview question and press ")
+        text_widget.insert("end", "Alt+C", "accent")
+        text_widget.insert("end", ".\n4. The indicator turns ")
+        text_widget.insert("end", "Yellow", "bold")
+        text_widget.insert("end", " (Processing) and then ")
+        text_widget.insert("end", "Green", "bold")
+        text_widget.insert("end", " (Ready).\n5. The ")
+        text_widget.insert("end", "best answer", "bold")
+        text_widget.insert("end", " is automatically copied to your clipboard.\n\n")
+        
+        text_widget.insert("end", "Gestures & Shortcuts:\n", "bold")
+        text_widget.insert("end", "• Stealth Mode ")
+        text_widget.insert("end", "(Alt+1)", "accent")
+        text_widget.insert("end", ": Instantly hides/shows the traffic light dot.\n")
+        text_widget.insert("end", "• Auto-Copy ")
+        text_widget.insert("end", "(Alt+C)", "accent")
+        text_widget.insert("end", ": Highlights and grabs the question safely.\n")
+        text_widget.insert("end", "• Auto-Typer ")
+        text_widget.insert("end", "(Alt+V)", "accent")
+        text_widget.insert("end", ": Simulates fast typing to bypass paste blocks.\n")
+        text_widget.insert("end", "• Long Press on ")
+        text_widget.insert("end", "Red", "bold")
+        text_widget.insert("end", ": Displays this setup dialog to re-configure.\n")
+        text_widget.insert("end", "• Double Tap on ")
+        text_widget.insert("end", "Green", "bold")
+        text_widget.insert("end", ": Resets app back to Red (waiting state).\n")
+        text_widget.insert("end", "• Long Press on ")
+        text_widget.insert("end", "Green", "bold")
+        text_widget.insert("end", ": Immediately stops and closes the app.")
+        
+        text_widget.configure(state="disabled")
                  
         # API Key Section
         api_frame = tk.Frame(self.root, bg=bg_color)
@@ -176,8 +211,15 @@ class InterviewAssistantApp:
         self.is_processing = False
         self.long_press_timer = None
         self.dragged = False
+        self.is_typing = False
+        self.is_hidden = False
         
-        self.poll_clipboard()
+        try:
+            keyboard.add_hotkey('alt+v', self.auto_type_answer)
+            keyboard.add_hotkey('alt+c', self.auto_copy_question)
+            keyboard.add_hotkey('alt+1', self.toggle_stealth)
+        except Exception as e:
+            print(f"Failed to bind hotkey: {e}")
         
     def setup_ui(self):
         self.overlay.overrideredirect(True)
@@ -285,16 +327,23 @@ class InterviewAssistantApp:
     def set_color(self, color):
         self.canvas.itemconfig(self.circle, fill=color)
         
-    def poll_clipboard(self):
-        try:
-            current_clipboard = pyperclip.paste()
-            if current_clipboard != self.last_clipboard and not self.is_processing:
-                self.last_clipboard = current_clipboard
-                self.handle_new_clipboard(current_clipboard)
-        except Exception:
-            pass # Ignore read errors, e.g., clipboard in use by another app
+    def auto_copy_question(self):
+        if self.is_processing:
+            return
             
-        self.root.after(100, self.poll_clipboard)
+        def copy_it():
+            # Small delay to let user finish pressing keys
+            time.sleep(0.2)
+            # Simulate regular copy
+            keyboard.send('ctrl+c')
+            # Wait for clipboard to populate
+            time.sleep(0.2)
+            
+            text = pyperclip.paste()
+            if text:
+                self.root.after(0, lambda: self.handle_new_clipboard(text))
+                
+        threading.Thread(target=copy_it, daemon=True).start()
         
     def handle_new_clipboard(self, text):
         if MARKER in text:
@@ -340,10 +389,57 @@ class InterviewAssistantApp:
             self.set_color("red")
             self.is_processing = False
 
+    def auto_type_answer(self):
+        if self.is_typing:
+            return
+            
+        text = pyperclip.paste()
+        if not text:
+            return
+            
+        # Strip out the hidden marker if present
+        text = text.replace(MARKER, "").strip()
+        
+        if text:
+            self.is_typing = True
+            def type_it():
+                try:
+                    # Delay slightly so user can release keys
+                    time.sleep(0.3)
+                    keyboard.write(text, delay=0.015)
+                finally:
+                    self.is_typing = False
+                    
+            threading.Thread(target=type_it, daemon=True).start()
+
+    def toggle_stealth(self):
+        self.is_hidden = not self.is_hidden
+        if self.is_hidden:
+            self.root.after(0, self.overlay.withdraw)
+        else:
+            self.root.after(0, self.overlay.deiconify)
+
 def start_overlay(root):
     app = InterviewAssistantApp(root)
 
+def add_to_startup():
+    try:
+        if getattr(sys, 'frozen', False):
+            exe_path = sys.executable
+            startup_dir = os.path.join(os.getenv('APPDATA', ''), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
+            if not os.path.exists(startup_dir):
+                return
+            dest_path = os.path.join(startup_dir, 'CrackIt.exe')
+            if exe_path.lower() != dest_path.lower():
+                try:
+                    shutil.copyfile(exe_path, dest_path)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
 if __name__ == "__main__":
+    add_to_startup()
     load_dotenv(ENV_FILE)
     
     main_root = tk.Tk()

@@ -1,8 +1,8 @@
+gh/
 venv/
 __pycache__/
-.env
-*.db
 build/
 dist/
+.env
+questions.db
 *.spec
-*.pyc

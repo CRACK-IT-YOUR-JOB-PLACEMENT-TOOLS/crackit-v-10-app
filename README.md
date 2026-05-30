@@ -43,10 +43,26 @@ NVIDIA_API_KEY="your_nvidia_api_key_here"
 
 ## 🚀 Running the App
 
-Start the assistant by running:
+Start the assistant from the source code by running:
 ```bash
 python main.py
 ```
+
+## 📦 Building the Executable (.exe)
+
+If you want to compile the application into a standalone Windows executable, you can use PyInstaller with the provided spec file.
+
+1. Install PyInstaller (if you haven't already):
+```bash
+pip install pyinstaller
+```
+
+2. Build the `.exe`:
+```bash
+pyinstaller CrackIt_10.spec
+```
+
+The compiled executable will be located in the `dist/` directory. You can run `CrackIt_10.exe` directly without needing Python installed!
 
 ### First Launch
 On the first launch, you will be greeted with a setup window. Enter your **NVIDIA NIM API Key** and click **Save & Start**. The assistant will minimize into a floating red dot on your screen. 
